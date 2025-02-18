@@ -1,4 +1,4 @@
-package com.wangxq.zz.model;
+package com.wangxq.zz.common.model;
 import java.io.Serializable;
 
 /**

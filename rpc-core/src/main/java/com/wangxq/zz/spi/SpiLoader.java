@@ -1,4 +1,4 @@
-package com.wangxq.zz.serializer;
+package com.wangxq.zz.spi;
 
 import cn.hutool.core.io.resource.ResourceUtil;
 import com.wangxq.zz.serializer.Serializer;
@@ -15,7 +15,12 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * SPI 加载器（支持键值对映射）
+ * SPI 加载器
+ * 自定义实现，支持键值对映射
+ *
+ * @author <a href="https://github.com/liyupi">程序员鱼皮</a>
+ * @learn <a href="https://codefather.cn">程序员鱼皮的编程宝典</a>
+ * @from <a href="https://yupi.icu">编程导航知识星球</a>
  */
 @Slf4j
 public class SpiLoader {
@@ -23,12 +28,12 @@ public class SpiLoader {
     /**
      * 存储已加载的类：接口名 =>（key => 实现类）
      */
-    private static Map<String, Map<String, Class<?>>> loaderMap = new ConcurrentHashMap<>();
+    private static final Map<String, Map<String, Class<?>>> loaderMap = new ConcurrentHashMap<>();
 
     /**
      * 对象实例缓存（避免重复 new），类路径 => 对象实例，单例模式
      */
-    private static Map<String, Object> instanceCache = new ConcurrentHashMap<>();
+    private static final Map<String, Object> instanceCache = new ConcurrentHashMap<>();
 
     /**
      * 系统 SPI 目录
@@ -55,6 +60,7 @@ public class SpiLoader {
      */
     public static void loadAll() {
         log.info("加载所有 SPI");
+        System.out.println(LOAD_CLASS_LIST);
         for (Class<?> aClass : LOAD_CLASS_LIST) {
             load(aClass);
         }
@@ -126,4 +132,12 @@ public class SpiLoader {
         loaderMap.put(loadClass.getName(), keyClassMap);
         return keyClassMap;
     }
+
+    public static void main(String[] args) throws IOException, ClassNotFoundException {
+        loadAll();
+        System.out.println(loaderMap);
+        Serializer serializer = getInstance(Serializer.class, "jdk");
+        System.out.println(serializer);
+    }
+
 }

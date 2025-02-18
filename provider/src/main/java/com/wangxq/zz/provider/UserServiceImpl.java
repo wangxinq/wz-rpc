@@ -1,7 +1,7 @@
-package com.wangxq.zz;
+package com.wangxq.zz.provider;
 
-import com.wangxq.zz.model.User;
-import com.wangxq.zz.service.UserService;
+import com.wangxq.zz.common.model.User;
+import com.wangxq.zz.common.service.UserService;
 
 public class UserServiceImpl implements UserService {
     @Override

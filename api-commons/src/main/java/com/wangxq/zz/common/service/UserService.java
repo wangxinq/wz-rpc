@@ -1,6 +1,6 @@
-package com.wangxq.zz.service;
+package com.wangxq.zz.common.service;
 
-import com.wangxq.zz.model.User;
+import com.wangxq.zz.common.model.User;
 
 /**
  * 用户服务
@@ -13,4 +13,7 @@ public interface UserService {
      * @return
      */
     User getUser(User user);
+    default short getNumber(){
+        return 1;
+    }
 }
