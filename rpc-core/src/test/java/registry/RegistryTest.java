@@ -1,3 +1,5 @@
+package registry;
+
 import com.wangxq.zz.config.RegistryConfig;
 import com.wangxq.zz.model.ServiceMetaInfo;
 import com.wangxq.zz.registry.EtcdRegistry;

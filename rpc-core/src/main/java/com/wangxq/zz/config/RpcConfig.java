@@ -1,5 +1,6 @@
 package com.wangxq.zz.config;
 
+import com.wangxq.zz.loadbalancer.LoadBalancerKeys;
 import com.wangxq.zz.serializer.SerializerKeys;
 import lombok.Data;
 /*
@@ -35,4 +36,8 @@ public class RpcConfig {
      * 注册中心配置
      */
     private RegistryConfig registryConfig = new RegistryConfig();
+    /**
+     * 负载均衡器
+     */
+    private String loadBalancer = LoadBalancerKeys.ROUND_ROBIN;
 }

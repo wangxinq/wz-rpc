@@ -1,4 +1,4 @@
-package com.wangxq.zz.server;
+package com.wangxq.zz.server.http;
 
 import io.vertx.core.Vertx;
 

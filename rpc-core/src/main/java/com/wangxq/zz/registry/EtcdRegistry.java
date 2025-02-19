@@ -1,5 +1,6 @@
 package com.wangxq.zz.registry;
 
+import cn.hutool.core.collection.ConcurrentHashSet;
 import com.wangxq.zz.config.RegistryConfig;
 import com.wangxq.zz.model.ServiceMetaInfo;
 import cn.hutool.core.collection.CollUtil;
@@ -9,6 +10,7 @@ import cn.hutool.json.JSONUtil;
 import io.etcd.jetcd.*;
 import io.etcd.jetcd.options.GetOption;
 import io.etcd.jetcd.options.PutOption;
+import io.etcd.jetcd.watch.WatchEvent;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -27,10 +29,19 @@ public class EtcdRegistry implements Registry{
      * 本机注册的节点 key 集合（用于维护续期）
      */
     private final Set<String> localRegisterNodeKeySet = new HashSet<>();
+    /**
+     * 注册中心服务缓存
+     */
+    private final RegistryServiceCache registryServiceCache = new RegistryServiceCache();
+    /**
+     * 正在监听的 key 集合
+     */
+    private final Set<String> watchingKeySet = new ConcurrentHashSet<>();
     @Override
     public void init(RegistryConfig registryConfig) {
         client = Client.builder().endpoints(registryConfig.getAddress()).connectTimeout(Duration.ofMillis(registryConfig.getTimeout())).build();
         kvClient = client.getKVClient();
+        heartBeat();
     }
 
     @Override
@@ -61,6 +72,10 @@ public class EtcdRegistry implements Registry{
 
     @Override
     public List<ServiceMetaInfo> serviceDiscovery(String serviceKey) {
+        List<ServiceMetaInfo> cachedServiceMetaInfoList = registryServiceCache.readCache();
+        if(cachedServiceMetaInfoList != null){
+            return cachedServiceMetaInfoList;
+        }
         // 前缀搜索，结尾一定加'/'
         String searchPrefix = ETCD_ROOT_PATH+serviceKey;
         try {
@@ -72,20 +87,41 @@ public class EtcdRegistry implements Registry{
                     .get()
                     .getKvs();
             // 解析服务信息
-            return keyValues.stream()
+            List<ServiceMetaInfo> serviceMetaInfoList = keyValues.stream()
                     .map(keyValue -> {
+                        String key = keyValue.getKey().toString(StandardCharsets.UTF_8);
+                        // 监听key
+                        watch(key);
                         String value = keyValue.getValue().toString(StandardCharsets.UTF_8);
                         return JSONUtil.toBean(value, ServiceMetaInfo.class);
                     })
                     .collect(Collectors.toList());
+
+            // 写入服务缓存
+            registryServiceCache.writeCache(serviceMetaInfoList);
+            return serviceMetaInfoList;
         } catch (Exception e) {
             throw new RuntimeException("获取服务列表失败", e);
         }
     }
-
+    /**
+     * JVM的ShutdownHook是Java虚拟机提供的一种机制，允许开发者在JVM即将
+     * 关闭之前执行一些清理工作或其他必要的操作，例如关闭数据库连接，释放资源，保存临时数据等
+     */
     @Override
     public void destroy() {
         System.out.println("当前节点下线");
+        // 下线节点
+        // 遍历本节点所有的 key
+        for(String key : localRegisterNodeKeySet){
+            try{
+                System.out.println(key+"删除成功");
+                kvClient.delete(ByteSequence.from(key,StandardCharsets.UTF_8));
+            }catch (Exception e){
+                throw new RuntimeException(key+"节点下线失败");
+            }
+        }
+        // 释放资源
         if(kvClient != null){
             kvClient.close();
         }
@@ -103,6 +139,8 @@ public class EtcdRegistry implements Registry{
                 // 遍历所有的 key
                 for(String key : localRegisterNodeKeySet){
                     try{
+                        // kvClient.get()是一个异步操作，它不会立即返回结果，而是返回一个CompletableFuture对象。通过调用.get()方法
+                        // 可以阻塞当前线程，直到异步操作完成并返回结果
                         List<KeyValue> keyValues = kvClient.get(ByteSequence.from(key, StandardCharsets.UTF_8))
                                 .get()
                                 .getKvs();
@@ -115,11 +153,42 @@ public class EtcdRegistry implements Registry{
                         String value = keyValue.getValue().toString(StandardCharsets.UTF_8);
                         ServiceMetaInfo serviceMetaInfo = JSONUtil.toBean(value,ServiceMetaInfo.class);
                         register(serviceMetaInfo);
+                        System.out.println("续签成功");
                     }catch (Exception e){
                         throw new RuntimeException(key+"续签失败");
                     }
                 }
             }
         });
+        // 支持秒级别定时任务
+        CronUtil.setMatchSecond(true);
+        CronUtil.start();
+    }
+    /**
+     * 监听（消费端）
+     * @param serviceNodeKey
+     */
+    @Override
+    public void watch(String serviceNodeKey) {
+        Watch watchClient = client.getWatchClient();
+        // 之前未被监听，开启监听
+        boolean newWatch = watchingKeySet.add(serviceNodeKey);
+        if(newWatch){
+            watchClient.watch(ByteSequence.from(serviceNodeKey,StandardCharsets.UTF_8),response ->{
+                for(WatchEvent event : response.getEvents()){
+                    switch(event.getEventType()){
+                        // key 删除时触发
+                        case DELETE:
+                            // 清理注册服务缓存
+                            registryServiceCache.clearCache();
+                            break;
+                        case PUT:
+                        default:
+                            break;
+                    }
+
+                }
+            });
+        }
     }
 }

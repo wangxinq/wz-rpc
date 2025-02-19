@@ -1,4 +1,4 @@
-package com.wangxq.zz.server;
+package com.wangxq.zz.server.http;
 
 import com.wangxq.zz.RpcApplication;
 import com.wangxq.zz.model.RpcRequest;
